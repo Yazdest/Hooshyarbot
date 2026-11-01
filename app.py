@@ -10,8 +10,16 @@ app = Flask(__name__)
 def home():
     return "Hooshyar Bot is active and running!"
 
-# ۲. تابع اجرای ربات تلگرام
-def run_bot():
+def run_flask():
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, use_reloader=False)
+
+# ۲. اجرای وب‌سرور در ترد پس‌زمینه
+flask_thread = threading.Thread(target=run_flask, daemon=True)
+flask_thread.start()
+
+# ۳. اجرای ربات تلگرام در ترد اصلی (اصلی‌ترین بخش برای رفع خطا)
+def main():
     TOKEN = "9050811861:AAH1_RI-0Vo6CzzOmJQogRxvLaNO6j6f5hM"
     application = Application.builder().token(TOKEN).build()
     
@@ -21,9 +29,5 @@ def run_bot():
     application.add_handler(CommandHandler("start", start))
     application.run_polling()
 
-# اجرای ربات در ترد پس‌زمینه به محض لود شدن برنامه توسط Gunicorn
-bot_thread = threading.Thread(target=run_bot, daemon=True)
-bot_thread.start()
-
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    main()
