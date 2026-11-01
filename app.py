@@ -29,9 +29,9 @@ def webhook():
         
         if client:
             try:
-                # ارسال پیام کاربر به مدل هوش مصنوعی جمینای
+                # ارسال پیام کاربر به مدل هوش مصنوعی جدید
                 response = client.models.generate_content(
-                    model='gemini-2.5-flash',
+                    model='gemini-3.8-flash',
                     contents=user_text,
                 )
                 reply_text = response.text
