@@ -8,7 +8,7 @@ app = Flask(__name__)
 
 TOKEN = "9050811861:AAH1_RI-0Vo6CzzOmJQogRxvLaNO6j6f5hM"
 
-# ساخت و راه‌اندازی اولیه ربات
+# ساخت و راه‌اندازی ربات
 application = Application.builder().token(TOKEN).build()
 
 async def start(update: Update, context):
@@ -22,11 +22,11 @@ loop.run_until_complete(application.initialize())
 
 @app.route('/')
 def home():
-    return "Hooshyar Bot is active and running via Webhook!"
+    return "Hooshyar Bot is active and running!"
 
-@app.route(f'/{TOKEN}', methods=['POST'])
+# تغییر مسیر وب‌هوک به یک مسیر ثابت و ساده (/webhook)
+@app.route('/webhook', methods=['POST'])
 def webhook():
-    # دریافت درخواست از تلگرام و پردازش آن
     json_data = request.get_json(force=True)
     update = Update.de_json(json_data, application.bot)
     
