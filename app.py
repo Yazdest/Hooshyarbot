@@ -1,40 +1,39 @@
 import os
 from flask import Flask, request
-from telegram import Update
-from telegram.ext import Application, CommandHandler
+import requests
 
 app = Flask(__name__)
 
 TOKEN = "9050811861:AAH1_RI-0Vo6CzzOmJQogRxvLaNO6j6f5hM"
-
-# ساخت و راه‌اندازی اولیه اپلیکیشن ربات
-application = Application.builder().token(TOKEN).build()
-
-async def start(update: Update, context):
-    await update.message.reply_text("سلام! ربات هوشیار با موفقیت روی سرور ابری مستقر شد.")
-
-application.add_handler(CommandHandler("start", start))
+TELEGRAM_API_URL = f"https://api.telegram.org/bot{TOKEN}"
 
 @app.route('/')
 def home():
-    return "Hooshyar Bot is active and running via Webhook!"
+    return "Hooshyar Bot is active and running!"
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    if request.headers.get('content-type') == 'application/json':
-        json_data = request.get_json(force=True)
-        update = Update.de_json(json_data, application.bot)
+    data = request.get_json(force=True)
+    
+    # بررسی اینکه پیام متنی وجود داشته باشد
+    if "message" in data and "text" in data["message"]:
+        chat_id = data["message"]["chat"]["id"]
+        text = data["message"]["text"]
         
-        # استفاده از متد مناسب برای پردازش آپدیت در بستر وب‌هوک
-        async def main():
-            await application.initialize()
-            await application.process_update(update)
-
-        import asyncio
-        asyncio.run(main())
-        return "OK", 200
-    else:
-        return "Invalid Request", 403
+        # پاسخ مستقیم و آنی با درخواست HTTP به تلگرام
+        if text == "/start" or text == "سلام":
+            reply_text = "سلام! ربات هوشیار با موفقیت روی سرور ابری مستقر شد و آماده پاسخگویی است."
+        else:
+            reply_text = f"پیام شما دریافت شد: {text}"
+            
+        url = f"{TELEGRAM_API_URL}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": reply_text
+        }
+        requests.post(url, json=payload)
+        
+    return "OK", 200
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
