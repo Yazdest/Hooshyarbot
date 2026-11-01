@@ -1,23 +1,23 @@
 import os
 from flask import Flask, request
 import requests
-from google import genai
+from groq import Groq
 
 app = Flask(__name__)
 
 TELEGRAM_TOKEN = "9050811861:AAH1_RI-0Vo6CzzOmJQogRxvLaNO6j6f5hM"
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
-# دریافت کلید API جمینای از تنظیمات سرور رندر
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+# دریافت کلید API گروک از تنظیمات سرور رندر
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
-# لیست مدل‌ها به ترتیب اولویت برای سوییچ خودکار در صورت بروز خطا
-FALLBACK_MODELS = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-1.5-flash']
+# استفاده از مدل فوق‌العاده سریع و قدرتمند Llama 3
+AI_MODEL = "llama-3.3-70b-versatile"
 
 @app.route('/')
 def home():
-    return "Hooshyar AI Bot is active and running with Multi-Model Fallback!"
+    return "Hooshyar AI Bot is active with Groq & Llama 3!"
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -27,27 +27,23 @@ def webhook():
         chat_id = data["message"]["chat"]["id"]
         user_text = data["message"]["text"]
         
-        reply_text = "خطا: کلید هوش مصنوعی در سرور تنظیم نشده است."
+        reply_text = "خطا: کلید هوش مصنوعی گروک در سرور تنظیم نشده است."
         
         if client:
-            success = False
-            # حلقه برای تلاش بین مدل‌های مختلف به صورت خودکار
-            for model_name in FALLBACK_MODELS:
-                try:
-                    response = client.models.generate_content(
-                        model=model_name,
-                        contents=user_text,
-                    )
-                    reply_text = response.text
-                    success = True
-                    break  # اگر پاسخ با موفقیت دریافت شد، از حلقه خارج شو
-                except Exception as e:
-                    # اگر خطایی رخ داد، به مدل بعدی سوییچ کن
-                    continue
-            
-            # اگر هیچ‌کدام از مدل‌ها پاسخ ندادند
-            if not success:
-                reply_text = "⚠️ تمامی مدل‌های هوش مصنوعی در حال حاضر با ترافیک بالا مواجه هستند. لطفاً چند لحظه دیگر دوباره پیام بفرستید."
+            try:
+                # ارسال پیام به هوش مصنوعی گروک
+                chat_completion = client.chat.completions.create(
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": user_text,
+                        }
+                    ],
+                    model=AI_MODEL,
+                )
+                reply_text = chat_completion.choices[0].message.content
+            except Exception as e:
+                reply_text = f"متأسفم، در پردازش درخواست خطایی رخ داد: {str(e)}"
         
         # ارسال پاسخ هوشمند به تلگرام
         payload = {
