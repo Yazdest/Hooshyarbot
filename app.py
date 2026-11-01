@@ -11,7 +11,7 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 @app.route('/')
 def home():
-    return "Hooshyar AI Bot Dynamic Model Discovery is active!"
+    return "Hooshyar AI Bot Model Inspector is active!"
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -30,44 +30,19 @@ def webhook():
             }
             
             try:
-                # ۱. گرفتن لیست مدل‌های مجاز برای این کلید خاص به صورت مستقیم
-                models_res = requests.get("https://api.groq.com/openai/v1/models", headers=headers, timeout=10)
+                # درخواست مستقیم لیست مدل‌های مجاز این کلید خاص
+                res = requests.get("https://api.groq.com/openai/v1/models", headers=headers, timeout=10)
                 
-                target_model = "llama3-70b-8192" # پیش‌فرض امن
-                
-                if models_res.status_code == 200:
-                    models_data = models_res.json().get("data", [])
-                    # پیدا کردن اولین مدلی که مربوط به چت است
-                    for m in models_data:
-                        m_id = m.get("id", "")
-                        if "llama" in m_id or "gemma" in m_id or "mixtral" in m_id:
-                            target_model = m_id
-                            break
-                
-                # ۲. ارسال درخواست چت با مدل پیدا شده
-                payload_groq = {
-                    "model": target_model,
-                    "messages": [
-                        {"role": "user", "content": user_text}
-                    ]
-                }
-                
-                response = requests.post(
-                    "https://api.groq.com/openai/v1/chat/completions",
-                    json=payload_groq,
-                    headers=headers,
-                    timeout=15
-                )
-                
-                if response.status_code == 200:
-                    res_json = response.json()
-                    reply_text = res_json['choices'][0]['message']['content']
+                if res.status_code == 200:
+                    models_json = res.json()
+                    model_ids = [m.get("id") for m in models_json.get("data", [])]
+                    reply_text = f"📋 مدل‌های مجاز کلید شما:\n" + "\n".join(model_ids[:10])
                 else:
-                    reply_text = f"خطا با مدل {target_model} (کد {response.status_code}):\n{response.text}"
+                    reply_text = f"خطا در دریافت لیست مدل‌ها (کد {res.status_code}):\n{res.text}"
             except Exception as e:
-                reply_text = f"خطای سیستمی: {str(e)}"
+                reply_text = f"خطای اتصال: {str(e)}"
         
-        # ارسال پاسخ نهایی به تلگرام
+        # ارسال لیست به تلگرام
         payload_telegram = {
             "chat_id": chat_id,
             "text": reply_text
