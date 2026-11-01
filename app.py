@@ -29,14 +29,18 @@ def webhook():
         
         if client:
             try:
-                # ارسال پیام کاربر به مدل هوش مصنوعی جدید
+                # ارسال پیام کاربر به مدل هوش مصنوعی
                 response = client.models.generate_content(
                     model='gemini-3.8-flash',
                     contents=user_text,
                 )
                 reply_text = response.text
             except Exception as e:
-                reply_text = f"متأسفم، در پردازش درخواست شما خطایی رخ داد: {str(e)}"
+                # بررسی خطای ترافیک بالا یا ناپایداری موقت سرور گوگل
+                if "503" in str(e) or "UNAVAILABLE" in str(e):
+                    reply_text = "⚠️ سرور هوش مصنوعی در حال حاضر با ترافیک بالا مواجه است. لطفاً چند لحظه دیگر دوباره پیام بفرستید."
+                else:
+                    reply_text = f"متأسفم، در پردازش درخواست شما خطایی رخ داد."
         
         # ارسال پاسخ هوشمند به تلگرام
         payload = {
