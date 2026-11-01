@@ -12,12 +12,9 @@ TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
-# استفاده از مدل جدید و پایدار گروک
-AI_MODEL = "llama-3.3-70b-versatile"
-
 @app.route('/')
 def home():
-    return "Hooshyar AI Bot is active with Groq Llama 3.3!"
+    return "Hooshyar AI Bot is active with Dynamic Model Detection!"
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -31,7 +28,14 @@ def webhook():
         
         if client:
             try:
-                # ارسال پیام به هوش مصنوعی گروک
+                # ۱. دریافت لیست مدل‌های فعال حساب شما به صورت خودکار از خود گروک
+                models_response = client.models.list()
+                available_models = [m.id for m in models_response.data if "llama" in m.id or "mixtral" in m.id or "gemma" in m.id]
+                
+                # اگر لیستی پیدا شد، مدل اول را انتخاب کن، وگرنه یک پیش‌فرض مطمئن بگذار
+                model_to_use = available_models[0] if available_models else "llama-3.3-70b-versatile"
+                
+                # ۲. ارسال پیام به مدل شناسایی‌شده
                 chat_completion = client.chat.completions.create(
                     messages=[
                         {
@@ -39,13 +43,30 @@ def webhook():
                             "content": user_text,
                         }
                     ],
-                    model=AI_MODEL,
+                    model=model_to_use,
                 )
                 reply_text = chat_completion.choices[0].message.content
+                
             except Exception as e:
-                reply_text = f"متأسفم، در پردازش درخواست خطایی رخ داد: {str(e)}"
+                # ۳. اگر به هر دلیلی لیست‌گیری خطا داد، از مدل‌های امن و عمومی پشتیبان استفاده کن
+                fallback_defaults = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"]
+                success = False
+                for fb_model in fallback_defaults:
+                    try:
+                        chat_completion = client.chat.completions.create(
+                            messages=[{"role": "user", "content": user_text}],
+                            model=fb_model,
+                        )
+                        reply_text = chat_completion.choices[0].message.content
+                        success = True
+                        break
+                    except:
+                        continue
+                
+                if not success:
+                    reply_text = f"متأسفم، خطایی در ارتباط با هوش مصنوعی رخ داد: {str(e)}"
         
-        # ارسال پاسخ هوشمند به تلگرام
+        # ارسال پاسخ نهایی به تلگرام
         payload = {
             "chat_id": chat_id,
             "text": reply_text
