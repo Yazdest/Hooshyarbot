@@ -1,6 +1,7 @@
 import os
-from flask import Flask, request
 import requests
+from flask import Flask, request
+from gtts import gTTS
 
 app = Flask(__name__)
 
@@ -12,16 +13,47 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 @app.route('/')
 def home():
-    return "Hooshyar AI Bot is active and stable!"
+    return "Hooshyar Smart Multi-Modal Bot is active!"
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.get_json(force=True)
     
-    if "message" in data and "text" in data["message"]:
-        chat_id = data["message"]["chat"]["id"]
-        user_text = data["message"]["text"]
+    if "message" in data:
+        message = data["message"]
+        chat_id = message["chat"]["id"]
         
+        # تشخیص اینکه آیا کاربر ویس فرستاده است یا متن
+        is_voice = "voice" in message
+        user_text = ""
+        
+        if is_voice:
+            # فعلاً اگر ویس فرستاد، یک متن پیش‌فرض برای پردازش در نظر می‌گیریم یا در نسخه‌های بعدی قابلیت STT اضافه می‌شود
+            # (در این نسخه ورودی صوتی تشخیص داده شده و پاسخ نهایی هم ویس خواهد بود)
+            user_text = "سلام، پیامتان به صورت صوتی دریافت شد."
+        elif "text" in message:
+            user_text = message["text"].strip()
+        
+        if not user_text:
+            return "OK", 200
+
+        # ۱. بررسی هوشمند درخواست تصویر (اگر کاربر کلمات کلیدی مربوط به عکس را به کار برد)
+        image_keywords = ["عکس", "تصویر", "نقاشی", "طراحی کن", "پوستر", "draw", "image", "photo", "picture"]
+        is_image_request = any(keyword in user_text.lower() for keyword in image_keywords)
+        
+        if is_image_request:
+            # استخراج پرامپت مناسب برای ساخت تصویر
+            image_url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(user_text)}"
+            
+            payload = {
+                "chat_id": chat_id,
+                "photo": image_url,
+                "caption": f"🎨 تصویر درخواستی شما:"
+            }
+            requests.post(f"{TELEGRAM_API_URL}/sendPhoto", json=payload)
+            return "OK", 200
+
+        # ۲. پردازش متن عادی با هوش مصنوعی (مدل Qwen)
         reply_text = "خطا: کلید هوش مصنوعی در سرور تنظیم نشده است."
         
         if GROQ_API_KEY:
@@ -29,8 +61,6 @@ def webhook():
                 "Authorization": f"Bearer {GROQ_API_KEY}",
                 "Content-Type": "application/json"
             }
-            
-            # استفاده از مدل دقیق و مجاز موجود در لیست کلید شما
             payload_groq = {
                 "model": "qwen/qwen3.8-27b",
                 "messages": [
@@ -50,16 +80,35 @@ def webhook():
                     res_json = response.json()
                     reply_text = res_json['choices'][0]['message']['content']
                 else:
-                    reply_text = f"خطای سرور: {response.status_code} - {response.text[:100]}"
+                    reply_text = "متأسفم، در پردازش درخواست خطایی رخ داد."
             except Exception as e:
-                reply_text = "متأسفم، در ارتباط با هوش مصنوعی خطایی رخ داد."
+                reply_text = "متأسفم، ارتباط با سرور هوش مصنوعی برقرار نشد."
         
-        # ارسال پاسخ نهایی به تلگرام
-        payload_telegram = {
-            "chat_id": chat_id,
-            "text": reply_text
-        }
-        requests.post(f"{TELEGRAM_API_URL}/sendMessage", json=payload_telegram)
+        # ۳. ارسال پاسخ متنی یا ویس بر اساس نوع ورودی کاربر
+        if is_voice:
+            # اگر کاربر ویس فرستاده بود، پاسخ هوش مصنوعی را هم به صورت ویس بفرست
+            voice_filename = f"voice_{chat_id}.ogg"
+            try:
+                tts = gTTS(text=reply_text, lang='fa')
+                tts.save(voice_filename)
+                
+                with open(voice_filename, 'rb') as voice_file:
+                    files = {'voice': voice_file}
+                    data_payload = {'chat_id': chat_id}
+                    requests.post(f"{TELEGRAM_API_URL}/sendVoice", data=data_payload, files=files)
+                
+                if os.path.exists(voice_filename):
+                    os.remove(voice_filename)
+            except:
+                # اگر در ساخت ویس خطایی شد، متن را بفرست که کاربر بی‌پاسخ نماند
+                requests.post(f"{TELEGRAM_API_URL}/sendMessage", json={"chat_id": chat_id, "text": reply_text})
+        else:
+            # اگر کاربر متن فرستاده بود، متن جواب بده
+            payload_telegram = {
+                "chat_id": chat_id,
+                "text": reply_text
+            }
+            requests.post(f"{TELEGRAM_API_URL}/sendMessage", json=payload_telegram)
         
     return "OK", 200
 
