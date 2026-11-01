@@ -1,37 +1,49 @@
 import os
 from flask import Flask, request
 import requests
+from google import genai
 
 app = Flask(__name__)
 
-TOKEN = "9050811861:AAH1_RI-0Vo6CzzOmJQogRxvLaNO6j6f5hM"
-TELEGRAM_API_URL = f"https://api.telegram.org/bot{TOKEN}"
+TELEGRAM_TOKEN = "9050811861:AAH1_RI-0Vo6CzzOmJQogRxvLaNO6j6f5hM"
+TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
+
+# دریافت کلید API جمینای از تنظیمات سرور رندر
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
 @app.route('/')
 def home():
-    return "Hooshyar Bot is active and running!"
+    return "Hooshyar AI Bot is active and running!"
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.get_json(force=True)
     
-    # بررسی اینکه پیام متنی وجود داشته باشد
     if "message" in data and "text" in data["message"]:
         chat_id = data["message"]["chat"]["id"]
-        text = data["message"]["text"]
+        user_text = data["message"]["text"]
         
-        # پاسخ مستقیم و آنی با درخواست HTTP به تلگرام
-        if text == "/start" or text == "سلام":
-            reply_text = "سلام! ربات هوشیار با موفقیت روی سرور ابری مستقر شد و آماده پاسخگویی است."
-        else:
-            reply_text = f"پیام شما دریافت شد: {text}"
-            
-        url = f"{TELEGRAM_API_URL}/sendMessage"
+        # مقدار پیش‌فرض در صورت تنظیم نبودن کلید
+        reply_text = "خطا: کلید هوش مصنوعی در سرور تنظیم نشده است."
+        
+        if client:
+            try:
+                # ارسال پیام کاربر به مدل هوش مصنوعی جمینای
+                response = client.models.generate_content(
+                    model='gemini-2.5-flash',
+                    contents=user_text,
+                )
+                reply_text = response.text
+            except Exception as e:
+                reply_text = f"متأسفم، در پردازش درخواست شما خطایی رخ داد: {str(e)}"
+        
+        # ارسال پاسخ هوشمند به تلگرام
         payload = {
             "chat_id": chat_id,
             "text": reply_text
         }
-        requests.post(url, json=payload)
+        requests.post(f"{TELEGRAM_API_URL}/sendMessage", json=payload)
         
     return "OK", 200
 
