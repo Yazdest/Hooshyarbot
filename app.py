@@ -10,9 +10,12 @@ TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
+# حافظه موقت برای نگهداری آخرین درخواست تصویر هر کاربر (جهت قابلیت ویرایش و حافظه تصویر)
+user_last_prompts = {}
+
 @app.route('/')
 def home():
-    return "Hooshyar Smart Multi-Modal Bot is active!"
+    return "Hooshyar Ultimate Smart Bot is active!"
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -33,9 +36,9 @@ def webhook():
         if not user_text:
             return "OK", 200
 
-        # تشخیص درخواست تصویر
-        image_keywords = ["عکس", "تصویر", "نقاشی", "طراحی کن", "پوستر", "draw", "image", "photo", "picture"]
-        is_image_request = any(keyword in user_text.lower() for keyword in image_keywords)
+        # تشخیص هوشمند درخواست تصویر یا ویرایش عکس قبلی
+        image_keywords = ["عکس", "تصویر", "نقاشی", "طراحی", "پوستر", "بکش", "برف", "اضافه کن", "رنگ", "draw", "image", "photo", "picture"]
+        is_image_request = any(keyword in user_text.lower() for keyword in image_keywords) or chat_id in user_last_prompts
         
         if is_image_request and GROQ_API_KEY:
             headers = {
@@ -43,11 +46,21 @@ def webhook():
                 "Content-Type": "application/json"
             }
             
-            # استفاده از هوش مصنوعی برای تبدیل درخواست فارسی به پرامپت انگلیسی دقیق جهت ساخت عکس
+            # بازیابی زمینه یا عکس قبلی کاربر برای حفظ حافظه مکالمه تصویری
+            previous_context = user_last_prompts.get(chat_id, "")
+            
+            system_prompt = (
+                "You are an advanced AI image prompt engineer. Your task is to create a highly detailed, "
+                "high-quality English prompt for image generation using Flux model. "
+                f"Previous image context: '{previous_context}'. "
+                "If the user's current message is a modification or addition (e.g. adding snow, changing background), update the previous context accordingly. "
+                "Output ONLY the final, detailed English prompt for the image, nothing else."
+            )
+            
             prompt_payload = {
                 "model": "qwen/qwen3.8-27b",
                 "messages": [
-                    {"role": "system", "content": "You are a prompt generator for image generation. Convert the user's request into a short, descriptive English image prompt. Output ONLY the English prompt, nothing else."},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_text}
                 ]
             }
@@ -59,19 +72,22 @@ def webhook():
                     english_prompt = p_res.json()['choices'][0]['message']['content'].strip()
             except:
                 pass
+            
+            # ذخیره پرامپت جدید در حافظه موقت کاربر
+            user_last_prompts[chat_id] = english_prompt
 
-            # ساخت لینک تصویر با پرامپت ترجمه‌شده و دقیق
-            image_url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(english_prompt)}"
+            # استفاده از مدل فوق‌العاده باکیفیت و قدرتمند Flux با رزولوشن بالا
+            image_url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(english_prompt)}?model=flux&width=1024&height=1024&nologo=true"
             
             payload = {
                 "chat_id": chat_id,
                 "photo": image_url,
-                "caption": f"🎨 تصویر درخواستی شما"
+                "caption": f"🎨 تصویر باکیفیت درخواستی شما"
             }
             requests.post(f"{TELEGRAM_API_URL}/sendPhoto", json=payload)
             return "OK", 200
 
-        # چت عادی متنی با هوش مصنوعی
+        # چت عادی متنی با مدل هوش مصنوعی Qwen
         reply_text = "خطا: کلید هوش مصنوعی در سرور تنظیم نشده است."
         
         if GROQ_API_KEY:
@@ -102,7 +118,7 @@ def webhook():
             except Exception as e:
                 reply_text = "متأسفم، ارتباط با سرور هوش مصنوعی برقرار نشد."
         
-        # پاسخ به کاربر (متن یا ویس)
+        # پاسخ هوشمند: اگر کاربر ویس فرستاده بود ویس بده، اگر متن فرستاده بود متن بده
         if is_voice:
             voice_filename = f"voice_{chat_id}.ogg"
             try:
