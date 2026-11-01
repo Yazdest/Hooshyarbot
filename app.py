@@ -10,17 +10,9 @@ TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 # دریافت کلید API گروک از تنظیمات سرور رندر
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
-# لیست کامل مدل‌های احتمالی گروک برای جلوگیری صددرصدی از خطای مدل
-CANDIDATE_MODELS = [
-    "llama-3.3-70b-versatile",
-    "llama-3.1-8b-instant",
-    "llama3-70b-8192",
-    "gemma2-9b-it"
-]
-
 @app.route('/')
 def home():
-    return "Hooshyar AI Bot is active and stable!"
+    return "Hooshyar AI Bot Debug Mode is active!"
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -30,42 +22,38 @@ def webhook():
         chat_id = data["message"]["chat"]["id"]
         user_text = data["message"]["text"]
         
-        reply_text = "خطا: کلید هوش مصنوعی در سرور تنظیم نشده است."
-        
-        if GROQ_API_KEY:
+        if not GROQ_API_KEY:
+            reply_text = "خطا: کلید GROQ_API_KEY در تنظیمات Render وارد نشده است!"
+        else:
             headers = {
                 "Authorization": f"Bearer {GROQ_API_KEY}",
                 "Content-Type": "application/json"
             }
             
-            success = False
-            # حلقه هوشمند روی تمام مدل‌های ممکن گروک
-            for model_name in CANDIDATE_MODELS:
-                payload_groq = {
-                    "model": model_name,
-                    "messages": [
-                        {"role": "user", "content": user_text}
-                    ]
-                }
-                
-                try:
-                    response = requests.post(
-                        "https://api.groq.com/openai/v1/chat/completions",
-                        json=payload_groq,
-                        headers=headers,
-                        timeout=12
-                    )
-                    
-                    if response.status_code == 200:
-                        res_json = response.json()
-                        reply_text = res_json['choices'][0]['message']['content']
-                        success = True
-                        break # اگر پاسخ گرفتیم، از حلقه خارج شو
-                except Exception:
-                    continue
+            # استفاده از مدل استاندارد گروک
+            payload_groq = {
+                "model": "llama-3.1-8b-instant",
+                "messages": [
+                    {"role": "user", "content": user_text}
+                ]
+            }
             
-            if not success:
-                reply_text = "متأسفم، در حال حاضر ارتباط با سرور هوش مصنوعی برقرار نشد. لطفاً چند لحظه دیگر دوباره تلاش کنید."
+            try:
+                response = requests.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    json=payload_groq,
+                    headers=headers,
+                    timeout=15
+                )
+                
+                if response.status_code == 200:
+                    res_json = response.json()
+                    reply_text = res_json['choices'][0]['message']['content']
+                else:
+                    # چاپ دقیق متن خطای بازگشتی از سرور گروک برای عیب‌یابی
+                    reply_text = f"⚠️ خطای سرور گروک (کد {response.status_code}):\n{response.text}"
+            except Exception as e:
+                reply_text = f"❌ خطای اتصال فنی: {str(e)}"
         
         # ارسال پاسخ نهایی به تلگرام
         payload_telegram = {
