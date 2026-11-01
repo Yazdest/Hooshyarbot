@@ -1,33 +1,40 @@
 import os
-import threading
-from flask import Flask
+import asyncio
+from flask import Flask, request
+from telegram import Update
 from telegram.ext import Application, CommandHandler
 
-# ۱. راه‌اندازی وب‌سرور Flask
 app = Flask(__name__)
+
+TOKEN = "9050811861:AAH1_RI-0Vo6CzzOmJQogRxvLaNO6j6f5hM"
+
+# ساخت و راه‌اندازی اولیه ربات
+application = Application.builder().token(TOKEN).build()
+
+async def start(update: Update, context):
+    await update.message.reply_text("سلام! ربات هوشیار با موفقیت روی سرور ابری مستقر شد.")
+
+application.add_handler(CommandHandler("start", start))
+
+# راه‌اندازی اولیه اپلیکیشن تلگرام
+loop = asyncio.get_event_loop()
+loop.run_until_complete(application.initialize())
 
 @app.route('/')
 def home():
-    return "Hooshyar Bot is active and running!"
+    return "Hooshyar Bot is active and running via Webhook!"
 
-def run_flask():
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, use_reloader=False)
-
-# ۲. اجرای وب‌سرور در ترد پس‌زمینه
-flask_thread = threading.Thread(target=run_flask, daemon=True)
-flask_thread.start()
-
-# ۳. اجرای ربات تلگرام در ترد اصلی (اصلی‌ترین بخش برای رفع خطا)
-def main():
-    TOKEN = "9050811861:AAH1_RI-0Vo6CzzOmJQogRxvLaNO6j6f5hM"
-    application = Application.builder().token(TOKEN).build()
+@app.route(f'/{TOKEN}', methods=['POST'])
+def webhook():
+    # دریافت درخواست از تلگرام و پردازش آن
+    json_data = request.get_json(force=True)
+    update = Update.de_json(json_data, application.bot)
     
-    async def start(update, context):
-        await update.message.reply_text("سلام! ربات هوشیار با موفقیت روی سرور ابری مستقر شد.")
+    async def process():
+        await application.process_update(update)
         
-    application.add_handler(CommandHandler("start", start))
-    application.run_polling()
+    loop.run_until_complete(process())
+    return "OK", 200
 
 if __name__ == "__main__":
-    main()
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
