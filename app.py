@@ -12,9 +12,12 @@ TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
+# لیست مدل‌ها به ترتیب اولویت برای سوییچ خودکار در صورت بروز خطا
+FALLBACK_MODELS = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-1.5-flash']
+
 @app.route('/')
 def home():
-    return "Hooshyar AI Bot is active and running!"
+    return "Hooshyar AI Bot is active and running with Multi-Model Fallback!"
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -24,23 +27,27 @@ def webhook():
         chat_id = data["message"]["chat"]["id"]
         user_text = data["message"]["text"]
         
-        # مقدار پیش‌فرض در صورت تنظیم نبودن کلید
         reply_text = "خطا: کلید هوش مصنوعی در سرور تنظیم نشده است."
         
         if client:
-            try:
-                # ارسال پیام کاربر به مدل هوش مصنوعی
-                response = client.models.generate_content(
-                    model='gemini-3.8-flash',
-                    contents=user_text,
-                )
-                reply_text = response.text
-            except Exception as e:
-                # بررسی خطای ترافیک بالا یا ناپایداری موقت سرور گوگل
-                if "503" in str(e) or "UNAVAILABLE" in str(e):
-                    reply_text = "⚠️ سرور هوش مصنوعی در حال حاضر با ترافیک بالا مواجه است. لطفاً چند لحظه دیگر دوباره پیام بفرستید."
-                else:
-                    reply_text = f"متأسفم، در پردازش درخواست شما خطایی رخ داد."
+            success = False
+            # حلقه برای تلاش بین مدل‌های مختلف به صورت خودکار
+            for model_name in FALLBACK_MODELS:
+                try:
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=user_text,
+                    )
+                    reply_text = response.text
+                    success = True
+                    break  # اگر پاسخ با موفقیت دریافت شد، از حلقه خارج شو
+                except Exception as e:
+                    # اگر خطایی رخ داد، به مدل بعدی سوییچ کن
+                    continue
+            
+            # اگر هیچ‌کدام از مدل‌ها پاسخ ندادند
+            if not success:
+                reply_text = "⚠️ تمامی مدل‌های هوش مصنوعی در حال حاضر با ترافیک بالا مواجه هستند. لطفاً چند لحظه دیگر دوباره پیام بفرستید."
         
         # ارسال پاسخ هوشمند به تلگرام
         payload = {
