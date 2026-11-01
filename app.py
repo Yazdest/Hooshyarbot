@@ -12,12 +12,12 @@ TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
-# استفاده از مدل فوق‌العاده سریع و قدرتمند Llama 3
-AI_MODEL = "llama-3.3-70b-versatile"
+# استفاده از مدل سریع و فعال گروک
+AI_MODEL = "llama-3.1-8b-instant"
 
 @app.route('/')
 def home():
-    return "Hooshyar AI Bot is active with Groq & Llama 3!"
+    return "Hooshyar AI Bot is active with Groq!"
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
